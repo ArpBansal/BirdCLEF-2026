@@ -1,0 +1,14 @@
+strategy: TAX_SMOOTHING
+models:
+  - name: Model_22
+    submission: subm_22.csv
+    weight: 0.05
+    lb: "0.928"
+  - name: Model_51
+    submission: subm_51.csv
+    weight: 0.95
+    lb: "0.949"
+taxonomy: data/birdclef-2026/taxonomy.csv
+genus_alpha: 0.15
+class_alpha: 0.05
+output: submission.csv

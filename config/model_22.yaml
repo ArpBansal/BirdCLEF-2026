@@ -1,0 +1,64 @@
+seed: 1891
+sample_rate: 32000
+window_seconds: 5
+windows_per_file: 12
+num_classes: 234
+embedding_dim: 1536
+device: cpu
+
+paths:
+  competition_dir: data/birdclef-2026
+  perch_onnx: models/perch_v2.onnx
+  perch_labels: models/labels.csv
+  proto_weights: models/model_22/proto_ssm_best.pt
+  residual_weights: models/model_22/residual_ssm_best.pt
+  probe_bundle: models/model_22/probes.joblib
+  output: subm_22.csv
+
+proto_ssm:
+  d_model: 320
+  d_state: 32
+  n_ssm_layers: 4
+  dropout: 0.12
+  n_prototypes: 2
+  n_sites: 20
+  meta_dim: 24
+  use_cross_attn: true
+  cross_attn_heads: 8
+
+training:
+  n_epochs: 80
+  lr: 0.0008
+  weight_decay: 0.001
+  val_ratio: 0.15
+  patience: 20
+  pos_weight_cap: 25.0
+  distill_weight: 0.15
+  proto_margin: 0.15
+  label_smoothing: 0.03
+  oof_n_splits: 5
+  mixup_alpha: 0.4
+  focal_gamma: 2.5
+  swa_start_frac: 0.65
+  swa_lr: 0.0004
+  use_cosine_restart: true
+  restart_period: 20
+
+residual_ssm:
+  d_model: 128
+  d_state: 16
+  n_ssm_layers: 2
+  dropout: 0.1
+  correction_weight: 0.35
+  n_epochs: 40
+  lr: 0.0008
+  patience: 12
+
+postprocess:
+  temperature_aves: 1.10
+  temperature_texture: 0.95
+  file_level_top_k: 2
+  tta_shifts: [0, 1, -1, 2, -2]
+  rank_aware_power: 0.4
+  delta_shift_alpha: 0.20
+  threshold_grid: [0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]

@@ -1,0 +1,76 @@
+seed: 4
+sample_rate: 32000
+window_seconds: 5
+windows_per_file: 12
+num_classes: 234
+embedding_dim: 1536
+device: cpu
+
+paths:
+  competition_dir: data/birdclef-2026
+  perch_onnx: models/perch_v2_no_dft.onnx
+  perch_labels: models/labels.csv
+  proto_weights: models/model_51/proto_ssm.pt
+  residual_weights: models/model_51/residual_ssm.pt
+  probe_bundle: models/model_51/probes.joblib
+  thresholds: models/model_51/thresholds.npy
+  sed_glob: models/sed_fold*.onnx
+  output: subm_51.csv
+
+proto_ssm:
+  d_model: 128
+  d_state: 16
+  n_ssm_layers: 2
+  dropout: 0.15
+  n_sites: 20
+  meta_dim: 16
+  use_cross_attn: true
+  cross_attn_heads: 2
+
+training:
+  n_epochs: 40
+  lr: 0.001
+  weight_decay: 0.001
+  patience: 8
+  pos_weight_cap: 25.0
+  distill_weight: 0.15
+  label_smoothing: 0.03
+  mixup_alpha: 0.4
+  focal_gamma: 2.5
+  swa_start_frac: 0.65
+  swa_lr: 0.0004
+
+residual_ssm:
+  d_model: 64
+  d_state: 8
+  dropout: 0.1
+  correction_weight: 0.30
+  n_epochs: 30
+  lr: 0.001
+  patience: 8
+
+fusion:
+  lambda_prior: 0.65
+  mapped_proto_weight: 0.60
+  unmapped_proto_weight: 0.35
+  proto_sed_weights: [0.60, 0.40]
+  correction_grid: [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40]
+
+postprocess:
+  temperature_aves: 1.10
+  temperature_texture: 0.95
+  file_level_top_k: 2
+  tta_shifts: [0, 1, -1, 2, -2]
+  file_confidence_power: 0.4
+  rank_aware_power: 0.65
+  delta_shift_alpha: 0.20
+  threshold_grid: [0.20, 0.225, 0.25, 0.275, 0.30, 0.325, 0.35, 0.375, 0.40, 0.425, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]
+
+sed:
+  n_mels: 256
+  n_fft: 2048
+  hop_length: 512
+  fmin: 20
+  fmax: 16000
+  top_db: 80
+  temporal_sigma: 0.65
