@@ -26,11 +26,12 @@ dependencies = [
 birdclef-train = "src.train.train:main"
 birdclef-infer = "inference.predict:main"
 birdclef-prepare = "src.processing.prepare:main"
+birdclef-dashboard = "dashboard.launcher:main"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = ["src", "inference"]
+module-name = ["src", "inference", "dashboard"]
 module-root = ""

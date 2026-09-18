@@ -22,6 +22,7 @@ src/processing/         Audio, metadata, and post-processing
 src/model/              ProtoSSM and ResidualSSM architectures
 src/train/              Losses and training entry point
 inference/              Perch/SED inference and ensemble entry points
+dashboard/              Streamlit audio inspection and inference UI
 models/                 Add downloaded/trained weights here
 ```
 
@@ -67,6 +68,23 @@ uv run birdclef-infer --model ensemble
 ```
 
 The commands write `subm_22.csv`, `subm_51.csv`, then `submission.csv`.
+
+## Interactive dashboard
+
+The dashboard runs inference in the Streamlit process. This keeps model loading,
+configuration, and preprocessing on one machine and avoids an unnecessary API
+service for a single-user inspection tool.
+
+```bash
+uv run birdclef-dashboard
+# Equivalent: uv run streamlit run dashboard/app.py
+```
+
+Upload WAV, OGG, FLAC, or MP3 audio to inspect the waveform and slide through
+all twelve five-second normalized log-mel windows using the persistent signal
+explorer. The dashboard also shows artifact readiness, top birds over the
+recording, and the three strongest predictions in every window. The raw
+prediction table is downloadable as CSV.
 
 ## Training
 
