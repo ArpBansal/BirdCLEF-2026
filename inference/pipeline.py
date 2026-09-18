@@ -252,14 +252,16 @@ def run_sed(paths: list[Path], labels: list[str], config: dict) -> pd.DataFrame:
     return result
 
 
-def run_model(config: dict, model_name: str) -> pd.DataFrame:
+def run_paths(
+    config: dict, model_name: str, paths: list[Path]
+) -> pd.DataFrame:
+    """Run one notebook model for an explicit list of 60-second audio files."""
     competition = config["paths"]["competition_dir"]
     sample = pd.read_csv(competition / "sample_submission.csv")
     taxonomy = pd.read_csv(competition / "taxonomy.csv")
     labels = sample.columns[1:].tolist()
-    paths = sorted((competition / "test_soundscapes").glob("*.ogg"))
     if not paths:
-        raise FileNotFoundError(f"No test .ogg files in {competition / 'test_soundscapes'}")
+        raise ValueError("At least one audio path is required")
 
     extractor = PerchExtractor(
         config["paths"]["perch_onnx"],
@@ -397,3 +399,12 @@ def run_model(config: dict, model_name: str) -> pd.DataFrame:
             result, sed, taxonomy, config["fusion"]["proto_sed_weights"]
         )
     return result
+
+
+def run_model(config: dict, model_name: str) -> pd.DataFrame:
+    """Run a model on the competition test directory."""
+    competition = config["paths"]["competition_dir"]
+    paths = sorted((competition / "test_soundscapes").glob("*.ogg"))
+    if not paths:
+        raise FileNotFoundError(f"No test .ogg files in {competition / 'test_soundscapes'}")
+    return run_paths(config, model_name, paths)
