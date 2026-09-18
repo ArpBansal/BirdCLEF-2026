@@ -17,6 +17,7 @@ dependencies = [
     "scikit-learn",
     "scipy",
     "soundfile",
+    "streamlit>=1.64.0",
     "torch>=2.9,<2.10",
     "tqdm",
 ]
