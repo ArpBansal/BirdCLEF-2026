@@ -5,9 +5,10 @@ __pycache__/
 dist/
 
 data/
-models/
 *.csv
 *.npz
 *.npy
 *.joblib
+!models/**/*.npy
+!models/**/*.joblib
 :memory:.ses
