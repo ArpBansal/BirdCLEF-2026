@@ -10,6 +10,7 @@ data/
 *.npz
 *.npy
 *.joblib
+!models/**/*.csv
 !models/**/*.npy
 !models/**/*.joblib
 :memory:.ses

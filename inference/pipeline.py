@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import glob
+import time
 from pathlib import Path
 
 import joblib
@@ -12,6 +13,7 @@ from scipy.ndimage import gaussian_filter1d
 
 from inference.perch import PerchExtractor
 from src.model import ProtoSSM, ResidualSSM
+from src.logging_config import get_logger
 from src.processing.audio import audio_to_mel, read_soundscape
 from src.processing.postprocess import (
     adaptive_delta_smooth,
@@ -23,7 +25,11 @@ from src.processing.postprocess import (
 from src.train.trainer import build_proto_model
 
 
+logger = get_logger("inference.pipeline")
+
+
 def _state_dict(path: Path) -> dict:
+    logger.info("Loading PyTorch checkpoint: %s", path)
     checkpoint = torch.load(path, map_location="cpu", weights_only=True)
     return checkpoint.get("state_dict", checkpoint) if isinstance(checkpoint, dict) else checkpoint
 
@@ -214,6 +220,7 @@ def run_sed(paths: list[Path], labels: list[str], config: dict) -> pd.DataFrame:
     model_paths = sorted(glob.glob(str(pattern)))
     if not model_paths:
         raise FileNotFoundError(f"No SED weights match {pattern}")
+    logger.info("Loading SED ensemble: folds=%d pattern=%s", len(model_paths), pattern)
     sessions = [ort.InferenceSession(path, providers=["CPUExecutionProvider"]) for path in model_paths]
     predictions, row_ids = [], []
     sed = config["sed"]
@@ -222,6 +229,7 @@ def run_sed(paths: list[Path], labels: list[str], config: dict) -> pd.DataFrame:
         return (1.0 / (1.0 + np.exp(-np.clip(values, -50, 50)))).astype(np.float32)
 
     for path in paths:
+        logger.info("Running SED inference: audio=%s", path)
         chunks, ends = read_soundscape(
             path, config["sample_rate"], config["window_seconds"], config["windows_per_file"]
         )
@@ -256,13 +264,22 @@ def run_paths(
     config: dict, model_name: str, paths: list[Path]
 ) -> pd.DataFrame:
     """Run one notebook model for an explicit list of 60-second audio files."""
+    started = time.perf_counter()
+    logger.info(
+        "Starting inference pipeline: model=%s files=%d paths=%s",
+        model_name,
+        len(paths),
+        [str(path) for path in paths],
+    )
     competition = config["paths"]["competition_dir"]
+    logger.info("Loading competition metadata: directory=%s", competition)
     sample = pd.read_csv(competition / "sample_submission.csv")
     taxonomy = pd.read_csv(competition / "taxonomy.csv")
     labels = sample.columns[1:].tolist()
     if not paths:
         raise ValueError("At least one audio path is required")
 
+    logger.info("Initializing Perch ONNX session: model=%s", config["paths"]["perch_onnx"])
     extractor = PerchExtractor(
         config["paths"]["perch_onnx"],
         config["paths"]["perch_labels"],
@@ -272,8 +289,16 @@ def run_paths(
         config["windows_per_file"],
         config["window_seconds"],
     )
+    logger.info("Running Perch feature extraction")
     metadata, scores, embeddings = extractor.run(paths)
+    logger.info(
+        "Perch extraction complete: metadata=%s scores=%s embeddings=%s",
+        metadata.shape,
+        scores.shape,
+        embeddings.shape,
+    )
     bundle_path = config["paths"]["probe_bundle"]
+    logger.info("Loading probe bundle: path=%s exists=%s", bundle_path, bundle_path.exists())
     bundle = joblib.load(bundle_path) if bundle_path.exists() else {}
     site_to_index = bundle.get("site_to_index", {})
     site_ids, hours = _metadata_ids(
@@ -283,6 +308,7 @@ def run_paths(
     embedding_files = embeddings.reshape(file_count, config["windows_per_file"], -1)
     score_files = scores.reshape(file_count, config["windows_per_file"], -1)
 
+    logger.info("Building ProtoSSM head: model=%s", model_name)
     proto = build_proto_model(config, model_name)
     if isinstance(proto, ProtoSSM):
         group_column = next(
@@ -301,6 +327,7 @@ def run_paths(
         ]
         proto.init_family_head(len(groups), class_to_group)
     proto.load_state_dict(_state_dict(config["paths"]["proto_weights"]))
+    logger.info("Running ProtoSSM temporal TTA")
     proto_scores = temporal_tta(
         proto,
         embedding_files,
@@ -334,6 +361,7 @@ def run_paths(
     )
 
     residual_settings = config["residual_ssm"]
+    logger.info("Building ResidualSSM head")
     residual = ResidualSSM(
         d_input=config["embedding_dim"],
         d_scores=len(labels),
@@ -394,10 +422,18 @@ def run_paths(
     result.insert(0, "row_id", metadata["row_id"].to_numpy())
 
     if model_name == "model_51":
+        logger.info("Running Model 51 SED branch and rank fusion")
         sed = run_sed(paths, labels, config)
         result = _model_51_rank_blend(
             result, sed, taxonomy, config["fusion"]["proto_sed_weights"]
         )
+    logger.info(
+        "Inference pipeline complete: model=%s rows=%d columns=%d elapsed_seconds=%.3f",
+        model_name,
+        len(result),
+        len(result.columns),
+        time.perf_counter() - started,
+    )
     return result
 
 

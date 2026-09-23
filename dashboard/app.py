@@ -13,6 +13,7 @@ import streamlit as st
 
 from inference.pipeline import run_paths
 from src.config import PROJECT_ROOT, load_config
+from src.logging_config import get_logger
 from src.processing.audio import audio_to_mel, read_soundscape
 
 
@@ -20,6 +21,8 @@ MODEL_LABELS = {
     "Model 22 · ProtoSSM v5": "model_22",
     "Model 51 · ProtoSSM + Distilled-SED": "model_51",
 }
+
+logger = get_logger("dashboard")
 
 
 def _required_artifacts(config: dict, model_name: str) -> list[Path]:
@@ -124,7 +127,14 @@ def _save_upload(uploaded_file) -> Path:
     suffix = Path(uploaded_file.name).suffix.lower() or ".wav"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
         handle.write(uploaded_file.getbuffer())
-        return Path(handle.name)
+        path = Path(handle.name)
+    logger.info(
+        "Saved upload for inference: name=%s bytes=%d temporary_path=%s",
+        uploaded_file.name,
+        uploaded_file.size,
+        path,
+    )
+    return path
 
 
 def _render_header() -> None:
@@ -283,6 +293,11 @@ def main() -> None:
         try:
             waveform, original_rate, duration = _audio_summary(temporary_path)
         except Exception as error:
+            logger.exception(
+                "Audio decoding failed: upload=%s content_type=%s",
+                uploaded.name,
+                uploaded.type,
+            )
             st.error("The uploaded file could not be decoded as audio.")
             st.exception(error)
             return
@@ -398,10 +413,30 @@ def main() -> None:
             run_clicked = st.button(
                 "Run inference", type="primary", disabled=bool(missing), use_container_width=True
             )
+        if missing:
+            missing_text = "\n".join(f"- `{path}`" for path in missing)
+            st.error(
+                "Inference is disabled because required artifacts are missing:\n\n"
+                f"{missing_text}"
+            )
+            missing_signature = f"{model_name}:" + "|".join(map(str, missing))
+            if st.session_state.get("logged_missing_artifacts") != missing_signature:
+                logger.error(
+                    "Inference disabled: model=%s missing_artifacts=%s",
+                    model_name,
+                    [str(path) for path in missing],
+                )
+                st.session_state["logged_missing_artifacts"] = missing_signature
         upload_digest = hashlib.sha256(uploaded.getvalue()).hexdigest()
         cache_key = f"{model_name}:{upload_digest}"
         if run_clicked:
             started = time.perf_counter()
+            logger.info(
+                "Inference requested: model=%s upload=%s sha256=%s",
+                model_name,
+                uploaded.name,
+                upload_digest,
+            )
             with st.status("Running inference…", expanded=True) as status:
                 st.write("Loading Perch and trained heads")
                 try:
@@ -411,10 +446,23 @@ def main() -> None:
                         temporary_path.stem, original_stem, regex=False
                     )
                 except Exception as error:
+                    logger.exception(
+                        "Inference failed: model=%s upload=%s temporary_path=%s",
+                        model_name,
+                        uploaded.name,
+                        temporary_path,
+                    )
                     status.update(label="Inference failed", state="error")
                     st.exception(error)
                 else:
                     elapsed = time.perf_counter() - started
+                    logger.info(
+                        "Inference completed: model=%s upload=%s rows=%d elapsed_seconds=%.3f",
+                        model_name,
+                        uploaded.name,
+                        len(prediction),
+                        elapsed,
+                    )
                     st.session_state["prediction"] = prediction
                     st.session_state["prediction_key"] = cache_key
                     st.session_state["prediction_elapsed"] = elapsed
@@ -467,4 +515,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        logger.exception("Unhandled dashboard error")
+        raise
