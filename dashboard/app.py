@@ -18,8 +18,8 @@ from src.processing.audio import audio_to_mel, read_soundscape
 
 
 MODEL_LABELS = {
-    "Model 22 · ProtoSSM v5": "model_22",
     "Model 51 · ProtoSSM + Distilled-SED": "model_51",
+    "Model 22 · ProtoSSM v5": "model_22",
 }
 
 logger = get_logger("dashboard")
